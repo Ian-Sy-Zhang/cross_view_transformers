@@ -41,6 +41,7 @@ class EfficientNetExtractor(torch.nn.Module):
         super().__init__()
 
         assert model_name in MODELS
+        # 确保layer_names中的所有层名称都在MODELS[model_name]中存在。
         assert all(k in [k for k, v in MODELS[model_name]] for k in layer_names)
 
         idx_max = -1
@@ -53,11 +54,17 @@ class EfficientNetExtractor(torch.nn.Module):
                 layer_to_idx[layer_name] = i
 
         # We can set memory efficient swish to false since we're using checkpointing
-        net = EfficientNet.from_pretrained(model_name)
-        net.set_swish(False)
+        net = EfficientNet.from_pretrained(model_name) # 创建了一个EfficientNet模型，并根据model_name从预训练的权重中加载了模型参数
+        net.set_swish(False) # 将Swish激活函数的内存高效模式设置为False。EfficientNet模型中的Swish激活函数默认是内存高效模式，但由于后续使用了checkpointing（内存优化技术），可以将其设置为非内存高效模式
 
-        drop = net._global_params.drop_connect_rate / len(net._blocks)
-        blocks = [nn.Sequential(net._conv_stem, net._bn0, net._swish)]
+        drop = net._global_params.drop_connect_rate / len(net._blocks)  # DropConnect是一种正则化技术，类似于Dropout，用于在训练过程中随机丢弃模型的连接，以减少过拟合。drop_connect_rate表示DropConnect的概率，即每个连接被保留的概率。将DropConnect概率除以模块数量，计算每个模块中DropConnect的概率。这样做的目的是将全局的DropConnect概率均匀分配到每个模块上，确保每个模块都具有相同的DropConnect概率。
+        '''
+        net._conv_stem：这是EfficientNet模型的卷积起始层，用于对输入图像进行初始的卷积操作。它将输入图像的通道数调整为模型需要的通道数。
+        net._bn0：这是EfficientNet模型的批归一化层（Batch Normalization），用于对卷积层的输出进行归一化处理，加速训练过程。
+        net._swish：这是EfficientNet模型内部使用的Swish激活函数。Swish激活函数是一种非线性函数，具有类似于ReLU的形状，但在某些情况下可以提供更好的性能。
+        nn.Sequential：这是PyTorch中的一个模块容器，用于按顺序组织多个模块。
+        '''
+        blocks = [nn.Sequential(net._conv_stem, net._bn0, net._swish)] # 综合起来，这段代码的目的是创建一个包含EfficientNet模型初始模块的列表。该列表包括了EfficientNet模型的卷积起始层、批归一化层和Swish激活函数。这些初始模块将在后续的代码中作为EfficientNet模型的子模块进行进一步组装和使用。
 
         # Only run needed blocks
         for idx in range(idx_max):
@@ -92,12 +99,13 @@ class EfficientNetExtractor(torch.nn.Module):
 
         return [result[i] for i in self.idx_pick]
 
-
+# *args: 星号的作用是把参数包装成元组的形式
 class SequentialWithArgs(nn.Sequential):
     def __init__(self, *layers_args):
         layers = [layer for layer, args in layers_args]
         args = [args for layer, args in layers_args]
 
+        # 调用父类nn.Sequential的初始化方法，将模块部分layers作为参数传递给它，以创建一个按顺序组织的模块容器。
         super().__init__(*layers)
 
         self.args = args
