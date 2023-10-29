@@ -137,6 +137,12 @@ class CrossAttention(nn.Module):
         """
         _, _, _, H, W = q.shape
 
+        '''
+        b represents the batch size,
+        n represents the sequence length,
+        d represents the input dimension,
+        H and W represent the height and width respectively.
+        '''
         # Move feature dim to last for multi-head proj
         q = rearrange(q, 'b n d H W -> b n (H W) d')
         k = rearrange(k, 'b n d h w -> b n (h w) d')
@@ -293,11 +299,13 @@ class Encoder(nn.Module):
         self.norm = Normalize()
         self.backbone = backbone
 
+        # 根据scale的值，创建一个down函数。如果scale小于1.0，down函数使用F.interpolate对输入进行下采样；否则，down函数不进行下采样，直接返回输入。
         if scale < 1.0:
             self.down = lambda x: F.interpolate(x, scale_factor=scale, recompute_scale_factor=False)
         else:
             self.down = lambda x: x
 
+        # 确保形状一样
         assert len(self.backbone.output_shapes) == len(middle)
 
         cross_views = list()
@@ -306,9 +314,11 @@ class Encoder(nn.Module):
         for feat_shape, num_layers in zip(self.backbone.output_shapes, middle):
             _, feat_dim, feat_height, feat_width = self.down(torch.zeros(feat_shape)).shape
 
+            # **cross_view表示可变长度的dict
             cva = CrossViewAttention(feat_height, feat_width, feat_dim, dim, **cross_view)
             cross_views.append(cva)
-
+            
+            # 创建一个由num_layers个ResNetBottleNeck实例组成的序列模块，并将该模块添加到layers列表中。
             layer = nn.Sequential(*[ResNetBottleNeck(dim) for _ in range(num_layers)])
             layers.append(layer)
 
