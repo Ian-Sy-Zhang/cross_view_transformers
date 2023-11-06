@@ -10,9 +10,10 @@ from typing import List
 ResNetBottleNeck = lambda c: Bottleneck(c, c // 4)
 
 
+# 生成坐标网络
 def generate_grid(height: int, width: int):
-    xs = torch.linspace(0, 1, width)
-    ys = torch.linspace(0, 1, height)
+    xs = torch.linspace(0, 1, width) # 生成宽度方向的均匀坐标，范围在0-1之间
+    ys = torch.linspace(0, 1, height) # 生成高度方向的均匀坐标，范围在0-1之间
 
     indices = torch.stack(torch.meshgrid((xs, ys), indexing='xy'), 0)       # 2 h w
     indices = F.pad(indices, (0, 0, 0, 0, 0, 1), value=1)                   # 3 h w
@@ -21,6 +22,16 @@ def generate_grid(height: int, width: int):
     return indices
 
 
+# 将大地图的坐标转换为小地图的坐标
+'''
+仿射变换 Affine Transformation
+图像的高度（h）、宽度（w）
+实际地图的高度（h_meters）、宽度（w_meters）
+偏移量（offset）
+缩放比例（sh和sw）
+
+对返回的矩阵进行逆运算可以将缩放的图形
+'''
 def get_view_matrix(h=200, w=200, h_meters=100.0, w_meters=100.0, offset=0.0):
     """
     copied from ..data.common but want to keep models standalone
@@ -29,9 +40,9 @@ def get_view_matrix(h=200, w=200, h_meters=100.0, w_meters=100.0, offset=0.0):
     sw = w / w_meters
 
     return [
-        [ 0., -sw,          w/2.],
-        [-sh,  0., h*offset+h/2.],
-        [ 0.,  0.,            1.]
+        [ 0., -sw,          w/2.], # X轴的缩放与平移
+        [-sh,  0., h*offset+h/2.], # Y轴的缩放与平移
+        [ 0.,  0.,            1.]  # 齐次坐标
     ]
 
 
@@ -98,9 +109,20 @@ class BEVEmbedding(nn.Module):
         grid[1] = bev_height * grid[1]
 
         # map from bev coordinates to ego frame
+        # 将大地图坐标映射到“小地图”（以自身为中心的地图）上
         V = get_view_matrix(bev_height, bev_width, h_meters, w_meters, offset)  # 3 3
+        # 对V矩阵取逆矩阵，可以将“小地图”还原为大地图
         V_inv = torch.FloatTensor(V).inverse()                                  # 3 3
+        '''
+        rearrange(grid, 'd h w -> d (h w)'):
+        d h w -> d (h w) 意味着 将(d, h, w)维度的向量转变为(d, h * w)维度； 这里d = 3
+        @ 是矩阵乘法，V_inv是一个3x3的矩阵，是从get_view_matrix函数获取的视图矩阵的逆矩阵。
+        V_inv : (3 , 3)
+        rearrange(grid, 'd h w -> d (h w)') : (3 , (h * w))
+        这个矩阵乘法操作会将rearrange后的grid张量中的每一个在小地图中的坐标，通过仿射变换映射回原始的大地图中的坐标。
+        '''
         grid = V_inv @ rearrange(grid, 'd h w -> d (h w)')                      # 3 (h w)
+        # 使用rearrange(grid, 'd (h w) -> d h w', h=h, w=w)将一维向量重新排列回2D网格。
         grid = rearrange(grid, 'd (h w) -> d h w', h=h, w=w)                    # 3 h w
 
         # egocentric frame
@@ -311,6 +333,7 @@ class Encoder(nn.Module):
         cross_views = list()
         layers = list()
 
+        # middle: list[2, 2]
         for feat_shape, num_layers in zip(self.backbone.output_shapes, middle):
             _, feat_dim, feat_height, feat_width = self.down(torch.zeros(feat_shape)).shape
 

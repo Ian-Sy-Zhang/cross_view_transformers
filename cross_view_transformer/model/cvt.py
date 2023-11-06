@@ -6,8 +6,8 @@ class CrossViewTransformer(nn.Module):
         self,
         encoder,
         decoder,
-        dim_last: int = 64,  # 转换后的特征数
-        outputs: dict = {'bev': [0, 1]}  # 要输出的特征映射的名称和通道范围
+        dim_last: int = 64,
+        outputs: dict = {'bev': [0, 1]}
     ):
         super().__init__()
 
@@ -35,6 +35,6 @@ class CrossViewTransformer(nn.Module):
     def forward(self, batch):
         x = self.encoder(batch) # 首先通过编码器模型self.encoder对输入进行编码
         y = self.decoder(x) # 通过解码器模型self.decoder对编码结果进行解码
-        z = self.to_logits(y) # 最后通过self.to_logits模块将解码结果转换为输出特征映射
+        z = self.to_logits(y) # 最后通过self.to_logits模块将解码结果转换为输出（BEV产出）
 
         return {k: z[:, start:stop] for k, (start, stop) in self.outputs.items()}

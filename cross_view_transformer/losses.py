@@ -85,6 +85,13 @@ class MultipleLoss(torch.nn.ModuleDict):
     loss, unweighted_outputs = losses(pred, label)
     """
     def __init__(self, modules_or_weights):
+        '''
+        在构造函数中，首先分别创建两个新的字典 modules 和 weights，然后遍历输入的字典。
+        如果字典的值是浮点数，那么将其作为权重加入 weights 字典；
+            否则，将其作为损失函数加入 modules 字典。
+        如果没有为某个损失函数指定权重，那么将其权重默认设置为1.0。
+        '''
+
         modules = dict()
         weights = dict()
 
@@ -109,7 +116,17 @@ class MultipleLoss(torch.nn.ModuleDict):
 
         self._weights = weights
 
+    '''
+    forward 方法接受两个参数，pred 和 batch，分别表示预测值和批量数据。
+    在该方法中，首先遍历所有的损失函数，使用它们计算损失，并将结果保存在 outputs 字典中。
+    然后，根据每个损失的权重计算总损失，并返回总损失和 outputs 字典。
+    '''
     def forward(self, pred, batch):
+        '''
+        self.items() 遍历 MultipleLoss 类的实例中存储的所有损失函数及其名称。
+        对于每一个损失函数 v 和对应的名称 k，调用 v(pred, batch) 计算损失，然后将结果存储在 outputs 字典中。
+        在每一个具体的loss function中，会取出batch的label部分（batch分为training data & label）并与prediction计算loss
+        '''
         outputs = {k: v(pred, batch) for k, v in self.items()}
         total = sum(self._weights[k] * o for k, o in outputs.items())
 
