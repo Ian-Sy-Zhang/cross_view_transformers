@@ -38,6 +38,9 @@ def setup_model_module(cfg: DictConfig) -> ModelModule:
     '''
     Datalogger的每个batch的数据会被取出并传递给model和loss_function。
     这个 batch 参数通常会被分解为输入数据和标签，然后input会被传递给model来获取预测值(prediction)，预测值和标签会一起被传递给损失函数来计算损失。
+    -----
+    The data of each batch of Datalogger will be taken out and passed to the model and loss_function.
+     This batch parameter is usually broken down into input data and labels, and then the input is passed to the model to obtain the prediction value (prediction), and the prediction value and label are passed together to the loss function to calculate the loss.
     '''
     model_module = ModelModule(backbone, loss_func, metrics,
                                cfg.optimizer, cfg.scheduler,

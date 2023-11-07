@@ -21,6 +21,7 @@ class ModelModule(pl.LightningModule):
         return self.backbone(batch)
 
     # 模型计算loss的地方
+    # Where the model calculates loss
     def shared_step(self, batch, prefix='', on_step=False, return_output=True):
         pred = self(batch)
         loss, loss_details = self.loss_func(pred, batch)

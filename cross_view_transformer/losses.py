@@ -90,6 +90,11 @@ class MultipleLoss(torch.nn.ModuleDict):
         如果字典的值是浮点数，那么将其作为权重加入 weights 字典；
             否则，将其作为损失函数加入 modules 字典。
         如果没有为某个损失函数指定权重，那么将其权重默认设置为1.0。
+        --------
+        In the constructor, first create two new dictionaries modules and weights respectively, and then iterate through the input dictionary.
+         If the value of the dictionary is a floating point number, then add it to the weights dictionary as a weight;
+             Otherwise, add it to the modules dictionary as a loss function.
+         If no weight is specified for a loss function, its weight defaults to 1.0.
         '''
 
         modules = dict()
@@ -120,12 +125,20 @@ class MultipleLoss(torch.nn.ModuleDict):
     forward 方法接受两个参数，pred 和 batch，分别表示预测值和批量数据。
     在该方法中，首先遍历所有的损失函数，使用它们计算损失，并将结果保存在 outputs 字典中。
     然后，根据每个损失的权重计算总损失，并返回总损失和 outputs 字典。
+    --------
+    The forward method accepts two parameters, pred and batch, which represent predicted values and batch data respectively.
+     In this method, first iterate over all loss functions, use them to calculate the loss, and save the results in the outputs dictionary.
+     Then, the total loss is calculated based on the weight of each loss, and the total loss and the outputs dictionary are returned.
     '''
     def forward(self, pred, batch):
         '''
         self.items() 遍历 MultipleLoss 类的实例中存储的所有损失函数及其名称。
         对于每一个损失函数 v 和对应的名称 k，调用 v(pred, batch) 计算损失，然后将结果存储在 outputs 字典中。
         在每一个具体的loss function中，会取出batch的label部分（batch分为training data & label）并与prediction计算loss
+        --------
+        self.items() iterates over all loss functions and their names stored in an instance of the MultipleLoss class.
+         For each loss function v and corresponding name k, call v(pred, batch) to calculate the loss and store the result in the outputs dictionary.
+         In each specific loss function, the label part of the batch is taken out (batch is divided into training data & label) and the loss is calculated with prediction
         '''
         outputs = {k: v(pred, batch) for k, v in self.items()}
         total = sum(self._weights[k] * o for k, o in outputs.items())

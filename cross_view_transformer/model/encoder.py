@@ -10,10 +10,10 @@ from typing import List
 ResNetBottleNeck = lambda c: Bottleneck(c, c // 4)
 
 
-# 生成坐标网络
+# 生成坐标网络 Generate coordinate network
 def generate_grid(height: int, width: int):
-    xs = torch.linspace(0, 1, width) # 生成宽度方向的均匀坐标，范围在0-1之间
-    ys = torch.linspace(0, 1, height) # 生成高度方向的均匀坐标，范围在0-1之间
+    xs = torch.linspace(0, 1, width) # 生成宽度方向的均匀坐标，范围在0-1之间 Generate uniform coordinates in the width direction, ranging from 0-1
+    ys = torch.linspace(0, 1, height) # 生成高度方向的均匀坐标，范围在0-1之间 Generate uniform coordinates in the height direction, ranging from 0-1
 
     indices = torch.stack(torch.meshgrid((xs, ys), indexing='xy'), 0)       # 2 h w
     indices = F.pad(indices, (0, 0, 0, 0, 0, 1), value=1)                   # 3 h w
@@ -22,7 +22,7 @@ def generate_grid(height: int, width: int):
     return indices
 
 
-# 将大地图的坐标转换为小地图的坐标
+# 将大地图的坐标转换为小地图的坐标 Convert the coordinates of the large map to the coordinates of the small map
 '''
 仿射变换 Affine Transformation
 图像的高度（h）、宽度（w）
@@ -30,7 +30,15 @@ def generate_grid(height: int, width: int):
 偏移量（offset）
 缩放比例（sh和sw）
 
-对返回的矩阵进行逆运算可以将缩放的图形
+对返回的矩阵进行逆运算可以将缩放的图形还原为大地图
+-----
+Affine Transformation Affine Transformation
+Image height (h), width (w)
+Actual map height (h_meters), width (w_meters)
+offset
+Scaling (sh and sw)
+
+Inverting the returned matrix restores the scaled graph to a large map
 '''
 def get_view_matrix(h=200, w=200, h_meters=100.0, w_meters=100.0, offset=0.0):
     """
@@ -40,9 +48,9 @@ def get_view_matrix(h=200, w=200, h_meters=100.0, w_meters=100.0, offset=0.0):
     sw = w / w_meters
 
     return [
-        [ 0., -sw,          w/2.], # X轴的缩放与平移
-        [-sh,  0., h*offset+h/2.], # Y轴的缩放与平移
-        [ 0.,  0.,            1.]  # 齐次坐标
+        [ 0., -sw,          w/2.], # X轴的缩放与平移  X-axis scaling and translation
+        [-sh,  0., h*offset+h/2.], # Y轴的缩放与平移  Y-axis scaling and translation
+        [ 0.,  0.,            1.]  # 齐次坐标        Homogeneous coordinates
     ]
 
 
@@ -120,6 +128,13 @@ class BEVEmbedding(nn.Module):
         V_inv : (3 , 3)
         rearrange(grid, 'd h w -> d (h w)') : (3 , (h * w))
         这个矩阵乘法操作会将rearrange后的grid张量中的每一个在小地图中的坐标，通过仿射变换映射回原始的大地图中的坐标。
+        ------------
+        rearrange(grid, 'd h w -> d (h w)'):
+         d h w -> d (h w) means converting the vector of (d, h, w) dimensions into (d, h * w) dimensions; here d = 3
+         @ is matrix multiplication, V_inv is a 3x3 matrix, which is the inverse matrix of the view matrix obtained from the get_view_matrix function.
+         V_inv: (3, 3)
+         rearrange(grid, 'd h w -> d (h w)') : (3 , (h * w))
+         This matrix multiplication operation will map each coordinate in the small map in the rearranged grid tensor back to the coordinates in the original large map through affine transformation.
         '''
         grid = V_inv @ rearrange(grid, 'd h w -> d (h w)')                      # 3 (h w)
         # 使用rearrange(grid, 'd (h w) -> d h w', h=h, w=w)将一维向量重新排列回2D网格。
@@ -322,12 +337,14 @@ class Encoder(nn.Module):
         self.backbone = backbone
 
         # 根据scale的值，创建一个down函数。如果scale小于1.0，down函数使用F.interpolate对输入进行下采样；否则，down函数不进行下采样，直接返回输入。
+        # Create a down function based on the value of scale. If scale is less than 1.0, the down function uses F.interpolate to downsample the input; otherwise, the down function does not downsample and returns the input directly.
         if scale < 1.0:
             self.down = lambda x: F.interpolate(x, scale_factor=scale, recompute_scale_factor=False)
         else:
             self.down = lambda x: x
 
         # 确保形状一样
+        # Make sure the shape is the same
         assert len(self.backbone.output_shapes) == len(middle)
 
         cross_views = list()
@@ -338,10 +355,12 @@ class Encoder(nn.Module):
             _, feat_dim, feat_height, feat_width = self.down(torch.zeros(feat_shape)).shape
 
             # **cross_view表示可变长度的dict
+            # **cross_view represents a variable-length dict
             cva = CrossViewAttention(feat_height, feat_width, feat_dim, dim, **cross_view)
             cross_views.append(cva)
             
             # 创建一个由num_layers个ResNetBottleNeck实例组成的序列模块，并将该模块添加到layers列表中。
+            # Create a sequence module consisting of num_layers ResNetBottleNeck instances and add the module to the layers list.
             layer = nn.Sequential(*[ResNetBottleNeck(dim) for _ in range(num_layers)])
             layers.append(layer)
 
